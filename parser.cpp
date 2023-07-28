@@ -4,6 +4,10 @@
 #include <string>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cassert>
 
 using u32 = uint32_t;
 
@@ -11,36 +15,37 @@ class File {
 public:
 
     File(std::string_view path)
-        : handle(fopen(path.data(), "r")) {
-        if (handle == nullptr) {
+        : handle(open(path.data(), O_RDONLY)) {
+        if (handle == -1) {
             throw 1; // TODO proper exception handling (in whole file)
         }
     }
 
     ~File() {
-        fclose(handle);
+        close(handle);
     }
 
     std::string read() const {
-        auto seek_result = fseek(handle, 0, SEEK_END);
-        if (seek_result != 0) {
+        auto size = lseek(handle, 0, SEEK_END);
+        if (size == -1) {
             throw 2;
         }
 
-        auto size = ftell(handle);
-        rewind(handle);
+        lseek(handle, 0, SEEK_SET);  // rewind
 
         std::string result;
-        result.reserve(size);
+        result.reserve(size + 1);
 
-        if (!fgets(result.data(), size, handle)) {
+        // NOTE: includes no EOF
+        if (::read(handle, result.data(), size) != size) {
             return "";
         }
+
         return result;
     }
 
 private:
-    FILE* handle;
+    int handle;
 };
 
 class Parser {
@@ -50,19 +55,25 @@ public:
     Parser()
         : tokens()
         , positions()
-        , pos(0) {}
+        , pos(0)
+        , file_size(0) {}
 
     void parse(std::string_view path) {
         File f(path);
         auto contents = f.read();
+        file_size = contents.capacity();
         auto data = contents.c_str();
 
-        while (true) {
-            auto is_eof = parse_token(&data);
-            if (is_eof) {
-                break;
-            }
+        while (is_not_at_eof()) {
+            auto current_pos = pos;
+            auto t = parse_next(&data);
+            parse_whitespace(&data);
+            tokens.push_back(t);
+            positions.push_back(current_pos);
         }
+
+        tokens.push_back(token::END);
+        positions.push_back(pos);
     }
 
     void print_tokens() const {
@@ -72,23 +83,81 @@ public:
     }
 
 private:
-    // TODO helper functions to parse tokens
-    bool parse_token(const char **data) {
-        auto current_pos = pos;
-        auto t = parse_next(data);
-        tokens.push_back(t);
-        positions.push_back(pos);
-        return t == token::END;
+    bool is_not_at_eof() {
+        return pos < file_size;
+    }
+
+    void advance_pos(const char** data, u8 n) {
+        *data += n;
+        pos += n;
     }
 
     Token parse_next(const char **data) {
-        (*data)++; // TODO improve this..
-        return token::END;
+        printf("next %s\n", *data); // TODO rm
+        auto c = **data;
+        switch (c) {
+        case '@':
+            return parse_keyword(data);
+        default:
+            return parse_error(data);
+        }
+    }
+
+    Token parse_keyword(const char **data) {
+        auto str = *data;
+        if (memcmp(str, "@def", 4) == 0) {
+            advance_pos(data, 4);
+            return token::DEF;
+        }
+
+        if (memcmp(str, "@extern", 7) == 0) {
+            advance_pos(data, 7);
+            return token::EXTERN;
+        }
+
+        return parse_error(data);
+    }
+
+    void parse_whitespace(const char **data) {
+        auto str = *data;
+        bool found_non_whitespace = false;
+        while (is_not_at_eof() && !found_non_whitespace) {
+            switch (*str) {
+            case ' ':
+            case '\n':
+            case '\r':
+                printf("skipping!\n");
+                str++;
+                pos++;
+                break;
+            default:
+                found_non_whitespace = true;
+                break;
+            }
+        }
+
+        assert((*data != str || !is_not_at_eof()) && "lexer did not fully lex a token");
+        *data = str;
+    }
+
+    Token parse_error(const char** data) {
+        auto str = *data;
+        // TODO stop at . OR whitespace?
+        while (is_not_at_eof() && *str != '.') {
+            str++;
+            pos++;
+        }
+        // consume the found char also
+        *data = str + 1;
+        pos++;
+
+        return token::ERROR;
     }
 
     std::vector<Token> tokens;
     std::vector<u32> positions;  // only keep track of start..
     u32 pos;
+    u32 file_size;
 };
 
 /*
@@ -96,6 +165,7 @@ private:
  * whitespace
  * facts
  * rules
+ * error recovery
  * api to access parser data
  */
 

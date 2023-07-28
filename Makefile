@@ -1,5 +1,5 @@
 build:
-	g++ -std=c++20 -o parser parser.cpp -O0
+	g++ -std=c++20 -o parser parser.cpp -O0 -g3
 
 test: build
 	@./parser

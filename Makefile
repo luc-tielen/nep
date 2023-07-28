@@ -1,7 +1,10 @@
 build:
-	clang++ -o parser parser.cpp -O0
+	g++ -std=c++20 -o parser parser.cpp -O0
+
+test: build
+	@./parser
 
 clean:
 	rm -f *.o parser
 
-.PHONY: build clean
+.PHONY: build test clean

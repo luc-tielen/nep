@@ -36,6 +36,8 @@ namespace token {
         NUMBER_LITERAL = 26,
         STRING_LITERAL = 27,
         IDENTIFIER = 28,
+        NEGATION = 29,
+        COLON = 30,
         END = 0xfe, // EOF
         ERROR = 0xff;
 };

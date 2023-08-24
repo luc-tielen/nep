@@ -68,8 +68,8 @@ public:
         auto data = contents.c_str();
 
         while (is_not_at_eof()) {
-            auto current_pos = pos;
             parse_whitespace(&data);
+            auto current_pos = pos;
             auto t = parse_next(&data);
             tokens.push_back(t);
             positions.push_back(current_pos);
@@ -225,7 +225,7 @@ private:
             if (isalnum(c) || c == '_') {
                 str++;
                 pos++;
-            } else if (c == '(' || c == ',' || c == ')') {
+            } else if (c == '(' || c == ',' || c == ')' || c == '.') {
                 // TODO improve check (for arithmetic, ...)
                 // TODO fix off by 1 error
                 break;

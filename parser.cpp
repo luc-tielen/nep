@@ -104,6 +104,14 @@ private:
         return pos < file_size;
     }
 
+    inline bool is_identifier_char(int c) {
+        return isalnum(c) || c == '_';
+    }
+
+    inline bool is_delimiter_char(int c) {
+        return isspace(c) || c == '(' || c == ',' || c == ')' || c == '.';
+    }
+
     void advance_pos(const char** data, u8 n) {
         *data += n;
         pos += n;
@@ -181,6 +189,10 @@ private:
                 return parse_rest_of_identifier(data);
             }
 
+            if (isdigit(c)) {
+                return parse_number_literal(data);
+            }
+
             return parse_error(data);
         }
     }
@@ -193,24 +205,18 @@ private:
                 if (*(str + 1) == '3' && *(str + 2) == '2') {
                     advance_pos(data, 3);
 
-                    if (parse_rest_of_identifier(data) == token::IDENTIFIER) {
-                        return token::IDENTIFIER;
-                    }
-
-                    // if next char is not part of an identifier, we found a u32 type
-                    return token::U32_TYPE;
+                    if (!is_identifier_char(**data))
+                        // if next char is not part of an identifier, we found a u32 type
+                        return token::U32_TYPE;
                 }
                 return parse_rest_of_identifier(data);
             case 's':
                 if (memcmp (str + 1, "tring", 5) == 0) {
                     advance_pos(data, 6);
 
-                    if (parse_rest_of_identifier(data) == token::IDENTIFIER) {
-                        return token::IDENTIFIER;
-                    }
-
-                    // if next char is not part of an identifier, we found a u32 type
-                    return token::STRING_TYPE;
+                    if (!is_identifier_char(**data))
+                        // if next char is not part of an identifier, we found a u32 type
+                        return token::STRING_TYPE;
                 }
                 return parse_rest_of_identifier(data);
             default:
@@ -225,7 +231,7 @@ private:
             if (isalnum(c) || c == '_') {
                 str++;
                 pos++;
-            } else if (c == '(' || c == ',' || c == ')' || c == '.') {
+            } else if (is_delimiter_char(c)) {
                 // TODO improve check (for arithmetic, ...)
                 // TODO fix off by 1 error
                 break;
@@ -236,6 +242,26 @@ private:
 
         *data = str;
         return token::IDENTIFIER;
+    }
+
+    Token parse_number_literal(const char** data) {
+        auto str = *data;
+        while (is_not_at_eof()) {
+            auto c = *str;
+            if (isdigit(c)) {
+                str++;
+                pos++;
+            } else if (is_delimiter_char(c)) {
+                // TODO improve check (for arithmetic, ...)
+                // TODO fix off by 1 error
+                break;
+            } else {
+                return parse_error(data);
+            }
+        }
+
+        *data = str;
+        return token::NUMBER_LITERAL;
     }
 
     Token parse_keyword(const char **data) {
